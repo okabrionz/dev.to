@@ -36,8 +36,7 @@ module Search
         @body = ActiveSupport::HashWithIndifferentAccess.new
         build_queries
         add_sort
-        # By default we will return 0 documents if size is not specified
-        @body[:size] = @params[:size] || DEFAULT_PARAMS[:size]
+        set_size
       end
 
       def build_queries
@@ -54,9 +53,16 @@ module Search
         }
       end
 
+      def set_size
+        # By default we will return 0 documents if size is not specified
+        @body[:size] = DEFAULT_PARAMS[:size] unless @params[:per_page].present? && @params[:page].present?
+
+        @body[:size] = @params[:per_page].to_i * (@params[:page].to_i + 1)
+      end
+
       def filter_conditions
         FILTER_KEYS.map do |filter_key|
-          next if @params[filter_key].blank?
+          next if @params[filter_key].blank? || @params[filter_key] == 'all'
 
           { term: { filter_key => @params[filter_key] } }
         end.compact
@@ -70,7 +76,15 @@ module Search
         QUERY_KEYS.map do |query_key|
           next if @params[query_key].blank?
 
-          { match: { query_key => { query: @params[query_key] } } }
+          {
+            match: {
+              query_key => {
+                query: @params[query_key],
+                fuzziness: 10,
+                lenient: true
+              }
+            }
+          }
         end.compact
       end
     end
